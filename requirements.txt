@@ -1,5 +1,4 @@
-pip requirements
-streamlit 
+streamlit
 pandas
 mysql-connector-python
 altair
