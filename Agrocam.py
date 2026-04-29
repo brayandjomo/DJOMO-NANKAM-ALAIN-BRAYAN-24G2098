@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
-import mysql.connector
-from mysql.connector import Error
+import sqlite3
 import altair as alt
 
 # --- CONFIGURATION DE LA PAGE ---
@@ -12,27 +11,18 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- FONCTION DE CONNEXION ---
+# --- FONCTION DE CONNEXION (SQLite pour le Cloud) ---
 def get_connection():
-    try:
-        conn = mysql.connector.connect(
-            host="localhost",
-            user="djomo_admin",
-            password="DJ.NAB's2.0",
-            database="agrocam_db"
-        )
-        return conn
-    except Error as e:
-        st.error(f"Erreur de connexion MySQL : {e}")
-        return None
+    # Crée un fichier agrocam.db directement sur le serveur Streamlit
+    conn = sqlite3.connect("agrocam.db", check_same_thread=False)
+    return conn
 
-# --- CSS PERSONNALISÉ (Animations, Onglets et Cartes) ---
+# --- CSS PERSONNALISÉ (Animations & Design) ---
 st.markdown("""
 <style>
     .main { background-color: #0c0e12; color: #e0e0e0; }
-    [data-testid="stSidebar"] { background-color: #161a21; border-right: 1px solid #2d343f; }
     
-    /* --- ANIMATION DES ONGLETS --- */
+    /* Animation des Onglets */
     .stTabs [data-baseweb="tab-list"] { gap: 10px; }
     .stTabs [data-baseweb="tab"] {
         height: 50px; background-color: #1a202c;
@@ -44,7 +34,7 @@ st.markdown("""
         background-color: #00c853; color: #fff; border-color: #00c853; transform: translateY(-2px);
     }
     
-    /* --- ANIMATION DES CARTES KPI --- */
+    /* Animation des Cartes KPI */
     .kpi-card {
         background-color: #161a21; padding: 20px; border-radius: 12px;
         border: 1px solid #2d343f; text-align: center;
@@ -58,36 +48,32 @@ st.markdown("""
     .kpi-title { color: #a0aec0; font-size: 14px; text-transform: uppercase; margin-bottom: 8px; }
     .kpi-value { color: #00c853; font-size: 28px; font-weight: 800; }
     
-    /* Style des formulaires et boutons */
     .stButton>button { background-color: #00c853; color: white; border-radius: 8px; font-weight: bold; width: 100%; transition: 0.3s; }
     .stButton>button:hover { background-color: #00a441; transform: scale(1.02); }
 </style>
 """, unsafe_allow_html=True)
 
-# --- INITIALISATION DES TABLES ---
+# --- INITIALISATION DES TABLES (Version SQLite) ---
 def init_db():
     db = get_connection()
-    if db:
-        cursor = db.cursor()
-        cursor.execute("CREATE TABLE IF NOT EXISTS utilisateurs (nom VARCHAR(50) PRIMARY KEY, mdp VARCHAR(50))")
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS collectes (
-                id INT AUTO_INCREMENT PRIMARY KEY, utilisateur VARCHAR(50),
-                culture VARCHAR(100), region VARCHAR(100), variete VARCHAR(100), prix INT,
-                date_saisie TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (utilisateur) REFERENCES utilisateurs(nom)
-            )
-        """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS cheptel (
-                id INT AUTO_INCREMENT PRIMARY KEY, utilisateur VARCHAR(50),
-                espece VARCHAR(50), sante VARCHAR(50),
-                date_ajout TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (utilisateur) REFERENCES utilisateurs(nom)
-            )
-        """)
-        db.commit()
-        db.close()
+    cursor = db.cursor()
+    cursor.execute("CREATE TABLE IF NOT EXISTS utilisateurs (nom TEXT PRIMARY KEY, mdp TEXT)")
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS collectes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, utilisateur TEXT,
+            culture TEXT, region TEXT, variete TEXT, prix INTEGER,
+            date_saisie TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS cheptel (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, utilisateur TEXT,
+            espece TEXT, sante TEXT,
+            date_ajout TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    db.commit()
+    db.close()
 
 init_db()
 
@@ -110,14 +96,15 @@ if not st.session_state['connecte']:
                 pwd_input = st.text_input("Mot de passe", type="password")
                 if st.form_submit_button("Se connecter"):
                     db = get_connection()
-                    if db:
-                        cursor = db.cursor()
-                        cursor.execute("SELECT * FROM utilisateurs WHERE nom=%s AND mdp=%s", (user_input, pwd_input))
-                        if cursor.fetchone():
-                            st.session_state['connecte'] = True
-                            st.session_state['user_name'] = user_input
-                            st.rerun()
-                        else: st.error("Identifiants incorrects.")
+                    cursor = db.cursor()
+                    cursor.execute("SELECT * FROM utilisateurs WHERE nom=? AND mdp=?", (user_input, pwd_input))
+                    if cursor.fetchone():
+                        st.session_state['connecte'] = True
+                        st.session_state['user_name'] = user_input
+                        db.close()
+                        st.rerun()
+                    else: 
+                        st.error("Identifiants incorrects.")
                         db.close()
         else:
             st.markdown("### Créer un compte")
@@ -126,13 +113,13 @@ if not st.session_state['connecte']:
                 n_pwd = st.text_input("Choisir un mot de passe", type="password")
                 if st.form_submit_button("S'inscrire"):
                     db = get_connection()
-                    if db:
-                        cursor = db.cursor()
-                        try:
-                            cursor.execute("INSERT INTO utilisateurs (nom, mdp) VALUES (%s, %s)", (n_user, n_pwd))
-                            db.commit(); st.success("Compte créé ! Connectez-vous.")
-                        except: st.error("Utilisateur déjà pris.")
-                        db.close()
+                    cursor = db.cursor()
+                    try:
+                        cursor.execute("INSERT INTO utilisateurs (nom, mdp) VALUES (?, ?)", (n_user, n_pwd))
+                        db.commit()
+                        st.success("Compte créé ! Basculez l'interrupteur pour vous connecter.")
+                    except: st.error("Ce nom est déjà utilisé.")
+                    db.close()
 
 # --- APPLICATION PRINCIPALE ---
 else:
@@ -167,7 +154,7 @@ else:
                 if st.form_submit_button("Enregistrer"):
                     db = get_connection()
                     cursor = db.cursor()
-                    cursor.execute("INSERT INTO collectes (utilisateur, culture, region, variete, prix) VALUES (%s,%s,%s,%s,%s)", (st.session_state['user_name'], cult, reg, var, px))
+                    cursor.execute("INSERT INTO collectes (utilisateur, culture, region, variete, prix) VALUES (?,?,?,?,?)", (st.session_state['user_name'], cult, reg, var, px))
                     db.commit(); db.close(); st.success("✅ Vente enregistrée !")
             st.markdown("</div>", unsafe_allow_html=True)
         
@@ -190,7 +177,7 @@ else:
                 if st.form_submit_button("Ajouter"):
                     db = get_connection()
                     cursor = db.cursor()
-                    cursor.execute("INSERT INTO cheptel (utilisateur, espece, sante) VALUES (%s,%s,%s)", (st.session_state['user_name'], esp, san))
+                    cursor.execute("INSERT INTO cheptel (utilisateur, espece, sante) VALUES (?,?,?)", (st.session_state['user_name'], esp, san))
                     db.commit(); db.close(); st.success("✅ Animal ajouté !")
             st.markdown("</div>", unsafe_allow_html=True)
         with col_c2:
@@ -199,7 +186,7 @@ else:
             db.close()
             st.dataframe(df_c, use_container_width=True)
 
-    # --- ONGLET 3 : ANALYSE IA (Nuage de Points & Répartition) ---
+    # --- ONGLET 3 : ANALYSE IA (Nuage de Points) ---
     with tab3:
         st.subheader("Analyse Descriptive IA")
         db = get_connection()
@@ -231,6 +218,4 @@ else:
 
             if st.button("🚀 Audit Stratégique IA"):
                 st.success(f"Revenu global : **{df_v_ia['prix'].sum():,} FCFA**")
-                if not df_c_ia.empty and "Critique" in df_c_ia['sante'].values:
-                    st.error("⚠️ Alerte Sanitaire détectée dans le cheptel.")
         else: st.info("Saisissez des données pour activer l'audit.")
