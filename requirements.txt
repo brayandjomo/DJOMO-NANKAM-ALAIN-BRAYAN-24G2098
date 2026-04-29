@@ -1,0 +1,4 @@
+steramlit 
+pandas
+mysql-connector-python
+atlair
