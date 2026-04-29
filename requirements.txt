@@ -1,4 +1,3 @@
-pip requirements
 streamlit
 pandas
 mysql-connector-python
