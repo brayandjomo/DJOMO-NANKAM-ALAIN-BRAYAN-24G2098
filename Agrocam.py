@@ -15,13 +15,10 @@ st.set_page_config(
 def get_connection():
     return sqlite3.connect("agrocam.db", check_same_thread=False)
 
-# --- CSS PERSONNALISÉ (Animations et Design) ---
+# --- CSS PERSONNALISÉ ---
 st.markdown("""
 <style>
-    /* Global Styles */
     .stApp { background-color: #0c0e12; color: #e0e0e0; }
-    
-    /* Animation du bouton Analyse IA au survol */
     div.stButton > button:first-child[key="ai_btn"] {
         background-color: #00c853;
         color: white;
@@ -36,8 +33,6 @@ st.markdown("""
         box-shadow: 0 10px 20px rgba(0, 200, 83, 0.4);
         background-color: #00e676;
     }
-
-    /* Style Page Inscription / Connexion (Inspiration Image) */
     .auth-container {
         background-color: #ffffff;
         padding: 40px;
@@ -49,8 +44,6 @@ st.markdown("""
     }
     .auth-title { color: #1a202c; font-size: 32px; font-weight: 800; margin-bottom: 8px; }
     .auth-subtitle { color: #718096; font-size: 14px; margin-bottom: 30px; }
-
-    /* KPI Cards */
     .kpi-card {
         background-color: #161a21; padding: 20px; border-radius: 12px;
         border: 1px solid #2d343f; text-align: center;
@@ -58,8 +51,6 @@ st.markdown("""
     }
     .kpi-card:hover { transform: translateY(-5px); border-color: #00c853; }
     .kpi-value { color: #00c853; font-size: 28px; font-weight: 800; }
-    
-    /* Tabs Customization (Garde la taille originale des icônes) */
     .stTabs [data-baseweb="tab"] {
         background-color: #1a202c; border-radius: 10px 10px 0px 0px; 
         color: #a0aec0; font-weight: 600;
@@ -94,9 +85,12 @@ if not st.session_state['connecte']:
     
     with col_auth:
         st.markdown("<br><br>", unsafe_allow_html=True)
-        mode = st.radio("Action", ["Se Connecter", "S'inscrire"], horizontal=True, label_visibility="collapsed")
         
-        if mode == "S'inscrire":
+        # --- MODIFICATION ICI : REMPLACEMENT DU RADIO PAR UN TOGGLE ---
+        show_signup = st.toggle("S'inscrire (Activer) / Se Connecter (Désactiver)", key="auth_toggle")
+        
+        if show_signup:
+            # Bloc Inscription
             st.markdown("""<div class='auth-container'><div class='auth-title'>Create Account</div><div class='auth-subtitle'>Join the AgroCam Pro community today.</div>""", unsafe_allow_html=True)
             with st.form("signup_form"):
                 nom = st.text_input("Full Name", placeholder="Your Name")
@@ -106,11 +100,12 @@ if not st.session_state['connecte']:
                     try:
                         db.execute("INSERT INTO utilisateurs (nom, mdp) VALUES (?, ?)", (nom, pwd))
                         db.commit()
-                        st.success("Compte créé ! Connectez-vous.")
+                        st.success("Compte créé ! Désactivez le switch pour vous connecter.")
                     except: st.error("Nom déjà pris.")
                     db.close()
             st.markdown("</div>", unsafe_allow_html=True)
         else:
+            # Bloc Connexion
             st.markdown("""<div class='auth-container'><div class='auth-title'>Welcome Back</div><div class='auth-subtitle'>Please enter your details to login.</div>""", unsafe_allow_html=True)
             with st.form("login_form"):
                 u_nom = st.text_input("User Name", placeholder="Enter your name")
@@ -126,7 +121,7 @@ if not st.session_state['connecte']:
                     db.close()
             st.markdown("</div>", unsafe_allow_html=True)
 
-# --- APPLICATION PRINCIPALE ---
+# --- APPLICATION PRINCIPALE (Inchangée) ---
 else:
     c1, c2 = st.columns([5, 1])
     c1.title(f"🌿 Dashboard : {st.session_state['user_name']}")
@@ -154,7 +149,6 @@ else:
                 db.execute("INSERT INTO collectes (utilisateur, culture, region, prix) VALUES (?,?,?,?)", (st.session_state['user_name'], cult, reg, px))
                 db.commit(); db.close(); st.success("Vente enregistrée !")
         
-        # Toggle Basculable (Nouvelle fonctionnalité)
         if st.toggle("🔍 Afficher l'historique des ventes", key="toggle_v"):
             db = get_connection()
             df = pd.read_sql(f"SELECT culture, region, prix, date_saisie FROM collectes WHERE utilisateur='{st.session_state['user_name']}'", db)
@@ -171,7 +165,6 @@ else:
                 db.execute("INSERT INTO cheptel (utilisateur, espece, sante) VALUES (?,?,?)", (st.session_state['user_name'], esp, san))
                 db.commit(); db.close(); st.success("Animal ajouté !")
         
-        # Toggle Basculable (Nouvelle fonctionnalité)
         if st.toggle("🔍 Afficher le registre du cheptel", key="toggle_c"):
             db = get_connection()
             df = pd.read_sql(f"SELECT espece, sante, date_ajout FROM cheptel WHERE utilisateur='{st.session_state['user_name']}'", db)
@@ -180,25 +173,21 @@ else:
 
     with tab3:
         st.subheader("Analyse Descriptive IA")
-        
         db = get_connection()
         df_ia = pd.read_sql(f"SELECT culture, region, prix FROM collectes WHERE utilisateur='{st.session_state['user_name']}'", db)
         db.close()
 
-        # LOGIQUE IA : Génération d'analyse basée sur les données réelles
         if st.button("🚀 Lancer l'Analyse IA", key="ai_btn", use_container_width=True):
             if not df_ia.empty:
                 st.toast("L'IA examine vos données...", icon="🤖")
                 st.balloons()
                 
-                # --- Calculs Mathématiques ---
                 total_revenu = df_ia['prix'].sum()
                 moyenne_vente = df_ia['prix'].mean()
                 top_culture = df_ia.groupby('culture')['prix'].sum().idxmax()
                 val_top = df_ia.groupby('culture')['prix'].sum().max()
                 nb_transactions = len(df_ia)
                 
-                # --- Affichage du rapport ---
                 st.markdown(f"""
                 <div style="background-color: #161a21; padding: 20px; border-radius: 15px; border-left: 5px solid #00c853; margin-bottom: 20px;">
                     <h3 style="color: #00c853; margin-top: 0;">🤖 Interprétation AgroCam IA</h3>
@@ -208,21 +197,15 @@ else:
                         <li><b>Produit Phare :</b> Le <b>{top_culture}</b> domine votre catalogue avec un revenu cumulé de <b>{val_top:,} FCFA</b>.</li>
                         <li><b>Revenu Moyen :</b> Chaque transaction rapporte en moyenne <b>{moyenne_vente:,.2f} FCFA</b>.</li>
                     </ul>
-                    <p style="font-style: italic; color: #a0aec0; font-size: 0.9em;">
-                    💡 <b>Suggestion IA :</b> Le {top_culture} semble être votre levier de croissance principal. L'IA recommande d'augmenter les stocks dans cette catégorie pour maximiser vos bénéfices le mois prochain.
-                    </p>
                 </div>
                 """, unsafe_allow_html=True)
             else:
-                st.warning("⚠️ Aucune donnée disponible pour l'analyse. Saisissez des ventes dans le premier onglet.")
+                st.warning("⚠️ Aucune donnée disponible.")
 
         if not df_ia.empty:
-            # Graphique en Nuage de points (Conservé comme demandé)
             scatter = alt.Chart(df_ia).mark_circle(size=120, color='#00c853', opacity=0.7).encode(
                 x=alt.X('culture:N', title='Cultures'),
                 y=alt.Y('prix:Q', title='Prix (FCFA)'),
                 tooltip=['culture', 'region', 'prix']
             ).interactive().properties(height=400)
             st.altair_chart(scatter, use_container_width=True)
-        else:
-            st.info("Enregistrez des données pour activer les graphiques d'analyse.")
