@@ -181,14 +181,40 @@ else:
     with tab3:
         st.subheader("Analyse Descriptive IA")
         
-        # Bouton avec Animation au survol (Clé 'ai_btn' pour le CSS)
-        if st.button("🚀 Lancer l'Analyse IA", key="ai_btn", use_container_width=True):
-            st.toast("L'IA examine vos données...", icon="🤖")
-            st.balloons()
-
         db = get_connection()
         df_ia = pd.read_sql(f"SELECT culture, region, prix FROM collectes WHERE utilisateur='{st.session_state['user_name']}'", db)
         db.close()
+
+        # LOGIQUE IA : Génération d'analyse basée sur les données réelles
+        if st.button("🚀 Lancer l'Analyse IA", key="ai_btn", use_container_width=True):
+            if not df_ia.empty:
+                st.toast("L'IA examine vos données...", icon="🤖")
+                st.balloons()
+                
+                # --- Calculs Mathématiques ---
+                total_revenu = df_ia['prix'].sum()
+                moyenne_vente = df_ia['prix'].mean()
+                top_culture = df_ia.groupby('culture')['prix'].sum().idxmax()
+                val_top = df_ia.groupby('culture')['prix'].sum().max()
+                nb_transactions = len(df_ia)
+                
+                # --- Affichage du rapport ---
+                st.markdown(f"""
+                <div style="background-color: #161a21; padding: 20px; border-radius: 15px; border-left: 5px solid #00c853; margin-bottom: 20px;">
+                    <h3 style="color: #00c853; margin-top: 0;">🤖 Interprétation AgroCam IA</h3>
+                    <p>D'après l'analyse de vos <b>{nb_transactions} transactions</b> enregistrées :</p>
+                    <ul style="color: #e0e0e0;">
+                        <li><b>Performance Financière :</b> Votre chiffre d'affaires total s'élève à <b>{total_revenu:,} FCFA</b>.</li>
+                        <li><b>Produit Phare :</b> Le <b>{top_culture}</b> domine votre catalogue avec un revenu cumulé de <b>{val_top:,} FCFA</b>.</li>
+                        <li><b>Revenu Moyen :</b> Chaque transaction rapporte en moyenne <b>{moyenne_vente:,.2f} FCFA</b>.</li>
+                    </ul>
+                    <p style="font-style: italic; color: #a0aec0; font-size: 0.9em;">
+                    💡 <b>Suggestion IA :</b> Le {top_culture} semble être votre levier de croissance principal. L'IA recommande d'augmenter les stocks dans cette catégorie pour maximiser vos bénéfices le mois prochain.
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.warning("⚠️ Aucune donnée disponible pour l'analyse. Saisissez des ventes dans le premier onglet.")
 
         if not df_ia.empty:
             # Graphique en Nuage de points (Conservé comme demandé)
